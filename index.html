@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>The Conspiracy Gallery 🖼️</title>
+    <meta name="description" content="An endless 3D crayon art gallery where a cute fluffy character discovers conspiracy theory paintings.">
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Permanent+Marker&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            overflow: hidden;
+            background: #2a1f15;
+            font-family: 'Permanent Marker', cursive;
+            user-select: none;
+            color: #332;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #game-container {
+            position: absolute;
+            inset: 0;
+        }
+
+        /* Paper grain noise */
+        #noise-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.08;
+            z-index: 10;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            background-size: 256px 256px;
+        }
+
+        /* Vignette */
+        #vignette {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 11;
+            background: radial-gradient(ellipse at center, transparent 55%, rgba(20,12,5,0.55) 100%);
+        }
+
+        /* HUD */
+        #hud {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            z-index: 20;
+            pointer-events: none;
+            padding: 18px 22px;
+            gap: 12px;
+        }
+
+        .hud-pill {
+            background: rgba(245,239,224,0.92);
+            border: 3px solid #7a5c3c;
+            border-radius: 30px;
+            padding: 8px 18px;
+            font-size: 15px;
+            color: #3a2a1a;
+            letter-spacing: 0.5px;
+            box-shadow: 3px 4px 0 #7a5c3c;
+            white-space: nowrap;
+        }
+
+        #controls-hint {
+            position: absolute;
+            bottom: 28px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            background: rgba(245,239,224,0.88);
+            border: 3px solid #7a5c3c;
+            border-radius: 30px;
+            padding: 8px 24px;
+            font-size: 15px;
+            color: #3a2a1a;
+            transition: opacity 1.5s ease;
+            pointer-events: none;
+            box-shadow: 3px 4px 0 #7a5c3c;
+            white-space: nowrap;
+        }
+
+        /* Speech bubble inspect hint */
+        #inspect-hint {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 32%;
+            z-index: 20;
+            background: rgba(255,255,240,0.97);
+            border: 3px solid #5c4033;
+            border-radius: 16px;
+            padding: 10px 22px;
+            font-size: 18px;
+            color: #3a1a00;
+            display: none;
+            pointer-events: none;
+            box-shadow: 4px 5px 0 #5c4033;
+            animation: float 1.5s ease-in-out infinite;
+            white-space: nowrap;
+        }
+        #inspect-hint::after {
+            content: '';
+            position: absolute;
+            bottom: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 7px solid transparent;
+            border-top-color: #5c4033;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-5px); }
+        }
+
+        /* Inspection overlay */
+        #inspect-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(10, 6, 2, 0.65);
+            backdrop-filter: blur(14px) saturate(0.8);
+            -webkit-backdrop-filter: blur(14px) saturate(0.8);
+            z-index: 30;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        #inspect-content {
+            background: #fdf8ee;
+            padding: 28px 28px 20px;
+            border: 5px solid #5c4033;
+            border-radius: 16px;
+            max-width: min(95vw, 560px);
+            width: 100%;
+            max-height: 85vh;
+            overflow-y: auto;
+            touch-action: pan-y;
+            pointer-events: auto;
+            text-align: center;
+            box-shadow: 12px 12px 0px #2a1509, inset 0 0 0 2px rgba(200,170,120,0.3);
+            position: relative;
+            animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.75) rotate(-2deg); }
+            to   { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+
+        #inspect-title {
+            font-size: clamp(20px, 4vw, 28px);
+            margin-bottom: 16px;
+            border-bottom: 4px dashed #9a7050;
+            padding-bottom: 12px;
+            color: #2a1a08;
+            line-height: 1.2;
+        }
+
+        #inspect-canvas-container {
+            display: flex;
+            justify-content: center;
+        }
+
+        #inspect-canvas-container canvas, #inspect-canvas-container img {
+            object-fit: cover;
+            width: 100%;
+            max-width: 350px;
+            height: 250px;
+            border: 5px solid #332;
+            border-radius: 6px;
+            box-shadow: 6px 6px 0 rgba(0,0,0,0.4);
+            display: block;
+            margin: 0 auto;
+        }
+
+        #inspect-desc {
+            font-family: 'Caveat', cursive;
+            font-size: clamp(20px, 3.5vw, 26px);
+            margin-top: 16px;
+            line-height: 1.4;
+            font-weight: 600;
+            color: #3a2505;
+        }
+
+        #inspect-close {
+            margin-top: 16px;
+            font-size: 14px;
+            color: #998;
+            font-family: 'Caveat', cursive;
+            cursor: pointer;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        /* Rare painting shimmer */
+        .rare-frame {
+            animation: goldShimmer 2s ease-in-out infinite;
+        }
+        @keyframes goldShimmer {
+            0%,100% { box-shadow: 12px 12px 0px #2a1509, 0 0 30px #ffcc00aa; }
+            50%      { box-shadow: 12px 12px 0px #2a1509, 0 0 60px #ffcc00; }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div id="noise-overlay"></div>
+    <div id="vignette"></div>
+
+    <div id="hud">
+        <div class="hud-pill">🖼️ SEEN: <span id="seen-count">0</span></div>
+        <div class="hud-pill">📍 <span id="depth-count">0</span>m deep</div>
+    </div>
+
+    <div id="controls-hint">← → MOVE &nbsp;|&nbsp; SPACE INSPECT</div>
+    <div id="inspect-hint">✨ PRESS SPACE TO INSPECT ✨</div>
+
+    <div id="inspect-overlay">
+        <div id="inspect-content">
+            <h1 id="inspect-title">Title</h1>
+            <div id="inspect-canvas-container"></div>
+            <p id="inspect-desc">Description goes here.</p>
+            <div id="inspect-close">Tap outside or press ESC to return 🚪</div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+    // ─── CONSTANTS ────────────────────────────────────────────────────
+    const WALK_SPEED    = 0.045;
+    const LANE_WIDTH    = 2.2;
+    const SEG_LEN       = 12;
+    const WALL_DIST     = 4.5;
+    const WALL_H        = 10;
+    const CHAR_SCALE    = 1.0;
+    const CAM_Z_OFFSET  = 7;
+    const CAM_Y_OFFSET  = 3.5;
+    const FLOOR_W       = WALL_DIST * 2 + 2;
+
+    // ─── STATE ────────────────────────────────────────────────────────
+    let scene, camera, renderer, clock;
+    let charGroup, charParts = {};
+    let segments = [], paintings = [];
+    let dustParticles, dustPositions;
+
+    let currentLane   = 0;   // -1 left, 0 center, 1 right
+    let targetLaneX   = 0;
+    let gameState     = 'WALK';
+    let activePainting = null;
+    let seenPaintings  = new Set();
+    let totalPaintings = 0;
+    let isBlinking     = false;
+
+    let camX = 0, camY = CAM_Y_OFFSET, camZ = CAM_Z_OFFSET;
+
+    // ─── THEORIES ─────────────────────────────────────────────────────
+const THEORIES = [
+    { title: "Moon Landing Hoax", category: "Government", description: "NASA’s 1969 Moon landing is called fake by skeptics who point to strange shadows, the waving flag, and “studio-like” footage. Some believe Stanley Kubrick secretly filmed it to help America win the Space Race.", imageUrl: "https://picsum.photos/seed/MoonLandingHoax/512/512" },
+    { title: "Flat Earth", category: "Science & Tech", description: "Flat Earthers claim Earth is a giant disc surrounded by an Antarctic ice wall. They believe governments and NASA are hiding the truth from the public.", imageUrl: "https://picsum.photos/seed/FlatEarth/512/512" },
+    { title: "The Illuminati", category: "Elite & Power", description: "The Illuminati is believed to be a hidden elite group controlling governments, media, and money worldwide. Symbols in music videos and the all-seeing eye are seen as secret signs.", imageUrl: "https://picsum.photos/seed/TheIlluminati/512/512" },
+    { title: "Area 51", category: "Alien & Space", description: "Area 51 is rumored to store alien spacecraft and bodies recovered from UFO crashes. Its extreme secrecy and restricted access continue to fuel theories.", imageUrl: "https://picsum.photos/seed/Area51/512/512" },
+    { title: "Simulation Theory", category: "Science & Tech", description: "Simulation Theory suggests reality may actually be a giant computer simulation. Some scientists and tech leaders argue statistically it’s more likely than people think.", imageUrl: "https://picsum.photos/seed/SimulationTheory/512/512" },
+    { title: "Chemtrails", category: "Environment", description: "Chemtrail theorists believe certain airplane trails contain chemicals for weather control or population manipulation. The strange grid-like patterns in the sky are often used as “evidence.”", imageUrl: "https://picsum.photos/seed/Chemtrails/512/512" },
+    { title: "The Mandela Effect", category: "Science & Tech", description: "The Mandela Effect is when huge groups remember things differently from reality, like famous movie quotes or brand names. Some think it’s proof of parallel timelines colliding.", imageUrl: "https://picsum.photos/seed/TheMandelaEffect/512/512" },
+    { title: "Reptilian Elite", category: "Elite & Power", description: "This theory claims reptilian aliens secretly disguise themselves as world leaders and celebrities. Supposed “glitches” in live broadcasts are often pointed to as proof.", imageUrl: "https://picsum.photos/seed/ReptilianElite/512/512" },
+    { title: "Birds Aren't Real", category: "Government", description: "Birds Aren’t Real says the government replaced real birds with surveillance drones. Birds sitting on power lines are jokingly called “charging stations.”", imageUrl: "https://picsum.photos/seed/BirdsAren'tReal/512/512" },
+    { title: "Denver Airport Conspiracy", category: "Hidden History", description: "Denver Airport theories focus on creepy murals, underground tunnels, and a giant glowing-eyed horse statue. Many believe the airport hides elite or apocalyptic secrets.", imageUrl: "https://picsum.photos/seed/DenverAirportConspiracy/512/512" },
+    { title: "Paul is Dead", category: "Pop Culture", description: "Some believe Paul McCartney died in 1966 and was secretly replaced by a lookalike. Fans search Beatles songs and album covers for hidden clues.", imageUrl: "https://picsum.photos/seed/PaulisDead/512/512" },
+    { title: "Philadelphia Experiment", category: "Military & War", description: "The Philadelphia Experiment claims a US Navy ship teleported during a secret WWII experiment. Stories include sailors disappearing or becoming fused into the ship itself.", imageUrl: "https://picsum.photos/seed/PhiladelphiaExperiment/512/512" },
+    { title: "JFK Assassination", category: "Government", description: "Many doubt the official JFK assassination story, believing multiple shooters were involved. The “magic bullet theory” remains one of the biggest points of debate.", imageUrl: "https://picsum.photos/seed/JFKAssassination/512/512" },
+    { title: "9/11 Conspiracy", category: "Government", description: "9/11 conspiracy theories argue the Twin Towers collapsed too perfectly to be caused by planes alone. Building 7’s collapse is one of the biggest focuses of suspicion.", imageUrl: "https://picsum.photos/seed/9%2F11Conspiracy/512/512" },
+    { title: "Suppressed Cancer Cures", category: "Health & Med", description: "This theory claims pharmaceutical companies suppress cancer cures because long-term treatments make more money. Several researchers are said to have been silenced over the years.", imageUrl: "https://picsum.photos/seed/SuppressedCancerCures/512/512" },
+    { title: "5G Mind Control", category: "Health & Med", description: "5G mind control theories exploded during COVID, with claims towers affect human behavior or health. In some places, people even burned down 5G towers.", imageUrl: "https://picsum.photos/seed/5GMindControl/512/512" },
+    { title: "Hollow Earth", category: "Hidden History", description: "Hollow Earth believers think a hidden civilization exists inside Earth beneath the poles. Some legends claim explorers discovered entrances in Antarctica.", imageUrl: "https://picsum.photos/seed/HollowEarth/512/512" },
+    { title: "Tesla's Free Energy", category: "Science & Tech", description: "Nikola Tesla allegedly created a system for free wireless electricity before powerful investors shut it down. His missing research papers continue to fuel speculation.", imageUrl: "https://picsum.photos/seed/Tesla'sFreeEnergy/512/512" },
+    { title: "Frozen Walt Disney", category: "Pop Culture", description: "Rumors claim Walt Disney was cryogenically frozen after death to be revived in the future. The story became one of Hollywood’s most famous myths.", imageUrl: "https://picsum.photos/seed/FrozenWaltDisney/512/512" },
+    { title: "New World Order", category: "Elite & Power", description: "The New World Order theory says global elites are slowly creating a single world government with total surveillance and centralized control.", imageUrl: "https://picsum.photos/seed/NewWorldOrder/512/512" },
+    { title: "Kubrick's Moon Landing Confession", category: "Pop Culture", description: "Some believe Stanley Kubrick directed fake Moon landing footage after filming *2001: A Space Odyssey*. His movies are often analyzed for “hidden confessions.”", imageUrl: "https://picsum.photos/seed/Kubrick'sMoonLandingConfession/512/512" },
+    { title: "Water Fluoridation", category: "Health & Med", description: "Water fluoridation theories claim fluoride is added to public water not just for teeth, but to reduce intelligence or increase obedience.", imageUrl: "https://picsum.photos/seed/WaterFluoridation/512/512" },
+    { title: "MK-Ultra", category: "Government", description: "MK-Ultra was a real CIA program involving LSD experiments, hypnosis, and mind-control research on civilians. Many documents were destroyed before investigations began.", imageUrl: "https://picsum.photos/seed/MK-Ultra/512/512" },
+    { title: "Tupac is Alive", category: "Pop Culture", description: "Fans believe Tupac Shakur faked his death to escape fame and is secretly living in hiding. Posthumous songs and alleged sightings keep the theory alive.", imageUrl: "https://picsum.photos/seed/TupacisAlive/512/512" },
+    { title: "Princess Diana Assassination", category: "Elite & Power", description: "Some believe Princess Diana was assassinated rather than killed accidentally in a car crash. Her own letters about fearing an “accident” fueled suspicion.", imageUrl: "https://picsum.photos/seed/PrincessDianaAssassination/512/512" },
+    { title: "Bigfoot", category: "Cryptozoology", description: "Bigfoot theories claim giant ape-like creatures live hidden in remote forests. Despite countless sightings and blurry footage, no body has ever been found.", imageUrl: "https://picsum.photos/seed/Bigfoot/512/512" },
+    { title: "Titanic-Olympic Switch", category: "Hidden History", description: "The Titanic-Olympic Switch theory claims the Titanic was secretly swapped with its damaged sister ship for insurance fraud before the disaster.", imageUrl: "https://picsum.photos/seed/Titanic-OlympicSwitch/512/512" },
+    { title: "HAARP Weather Control", category: "Military & War", description: "HAARP conspiracy theories say a US research facility can secretly control weather, cause earthquakes, or manipulate storms using radio waves.", imageUrl: "https://picsum.photos/seed/HAARPWeatherControl/512/512" },
+    { title: "Nazi Bases in Antarctica", category: "Hidden History", description: "Some theorists believe Nazis built hidden bases in Antarctica after WWII and escaped there with advanced technology.", imageUrl: "https://picsum.photos/seed/NaziBasesinAntarctica/512/512" },
+    { title: "CIA and Crack Cocaine", category: "Government", description: "This theory accuses the CIA of helping flood US cities with crack cocaine in the 1980s to secretly fund foreign operations.", imageUrl: "https://picsum.photos/seed/CIAandCrackCocaine/512/512" },
+    { title: "Elvis is Alive", category: "Pop Culture", description: "Elvis Presley fans believe he faked his death and disappeared with government help. Alleged sightings still appear decades later.", imageUrl: "https://picsum.photos/seed/ElvisisAlive/512/512" },
+    { title: "The Truman Show Delusion", category: "Science & Tech", description: "The Truman Show Delusion is a real psychological condition where people believe their lives are secretly being filmed like a reality show.", imageUrl: "https://picsum.photos/seed/TheTrumanShowDelusion/512/512" },
+    { title: "Alien Abductions", category: "Alien & Space", description: "Alien abduction stories describe people being taken aboard UFOs for experiments by mysterious beings. Many accounts share eerily similar details.", imageUrl: "https://picsum.photos/seed/AlienAbductions/512/512" },
+    { title: "Monsanto Control", category: "Health & Med", description: "Monsanto conspiracy theories accuse the company of controlling the food supply through patented GMO seeds and harmful chemicals like Roundup.", imageUrl: "https://picsum.photos/seed/MonsantoControl/512/512" },
+    { title: "Artificial Sun", category: "Science & Tech", description: "Some theorists believe the Sun is artificially created because of its unusual stability and predictable cycles.", imageUrl: "https://picsum.photos/seed/ArtificialSun/512/512" },
+    { title: "Ancient Aliens", category: "Alien & Space", description: "Ancient Aliens theories claim extraterrestrials helped build the pyramids due to their incredible precision and engineering.", imageUrl: "https://picsum.photos/seed/AncientAliens/512/512" },
+    { title: "Simulation Theory Limits", category: "Science & Tech", description: "Simulation Theory argues physical reality has limits similar to a computer system, suggesting the universe may be programmed.", imageUrl: "https://picsum.photos/seed/SimulationTheoryLimits/512/512" },
+    { title: "Project Stargate", category: "Government", description: "Project Stargate was a real US government program researching psychic spying and “remote viewing” during the Cold War.", imageUrl: "https://picsum.photos/seed/ProjectStargate/512/512" },
+    { title: "The Deep State", category: "Government", description: "The Deep State theory claims unelected intelligence and military officials secretly maintain control regardless of election results.", imageUrl: "https://picsum.photos/seed/TheDeepState/512/512" },
+    { title: "Facebook DARPA Connection", category: "Technology", description: "Some believe Facebook was secretly connected to a DARPA surveillance project because both launched on the exact same day.", imageUrl: "https://picsum.photos/seed/FacebookDARPAConnection/512/512" },
+    { title: "Mileva Marić's Relativity", category: "Hidden History", description: "This theory argues Mileva Marić secretly contributed to Einstein’s relativity work but was erased from history.", imageUrl: "https://picsum.photos/seed/MilevaMari%C4%87'sRelativity/512/512" },
+    { title: "Roswell UFO Crash", category: "Alien & Space", description: "The Roswell incident began when the military first announced recovering a “flying disc” before suddenly changing the story to a weather balloon.", imageUrl: "https://picsum.photos/seed/RoswellUFOCrash/512/512" },
+    { title: "Dead Internet Theory", category: "Technology", description: "Dead Internet Theory claims most online content today is secretly generated by bots and AI rather than real humans.", imageUrl: "https://picsum.photos/seed/DeadInternetTheory/512/512" },
+    { title: "Black Knight Satellite", category: "Alien & Space", description: "The Black Knight Satellite is said to be an ancient alien object orbiting Earth for thousands of years, secretly monitoring humanity.", imageUrl: "https://picsum.photos/seed/BlackKnightSatellite/512/512" },
+    { title: "Ancient Egyptian Electricity", category: "Hidden History", description: "Some believe ancient Egyptians had electricity because temple carvings resemble light bulbs and tombs show no torch soot.", imageUrl: "https://picsum.photos/seed/AncientEgyptianElectricity/512/512" },
+    { title: "Vatican Secret Archives", category: "Religion", description: "The Vatican Secret Archives are rumored to contain hidden documents capable of rewriting religion and human history.", imageUrl: "https://picsum.photos/seed/VaticanSecretArchives/512/512" },
+    { title: "Phantom Time Hypothesis", category: "Hidden History", description: "The Phantom Time Hypothesis claims nearly 300 years of history were completely fabricated during the Middle Ages.", imageUrl: "https://picsum.photos/seed/PhantomTimeHypothesis/512/512" },
+    { title: "Bermuda Triangle", category: "Paranormal", description: "The Bermuda Triangle theory says mysterious disappearances there are caused by portals, magnetic anomalies, or alien technology.", imageUrl: "https://picsum.photos/seed/BermudaTriangle/512/512" },
+    { title: "Hollow Moon", category: "Science & Tech", description: "Hollow Moon theorists point to Apollo seismic experiments where the Moon allegedly “rang like a bell” after impact.", imageUrl: "https://picsum.photos/seed/HollowMoon/512/512" },
+    { title: "Shakespeare Authorship", category: "Hidden History", description: "Some believe Shakespeare was only a pen name used by a hidden writer from the elite class.", imageUrl: "https://picsum.photos/seed/ShakespeareAuthorship/512/512" },
+    { title: "CIA Counterculture Control", category: "Government", description: "Some theorists say the CIA influenced 1960s counterculture movements to redirect political rebellion into music, drugs, and distraction.", imageUrl: "https://picsum.photos/seed/CIACountercultureControl/512/512" },
+    { title: "Library of Alexandria Archives", category: "Hidden History", description: "This theory claims the Library of Alexandria’s knowledge wasn’t destroyed, but secretly hidden away in protected archives.", imageUrl: "https://picsum.photos/seed/LibraryofAlexandriaArchives/512/512" },
+    { title: "Predictive Programming", category: "Pop Culture", description: "Hollywood Predictive Programming suggests movies and TV shows secretly “prepare” society for future real-world events before they happen.", imageUrl: "https://picsum.photos/seed/PredictiveProgramming/512/512" },
+    { title: "The Federal Reserve", category: "Elite & Power", description: "The Federal Reserve is technically a private banking system, leading some to believe global finance is controlled behind closed doors.", imageUrl: "https://picsum.photos/seed/TheFederalReserve/512/512" },
+    { title: "Antarctica Secrets", category: "Hidden History", description: "Antarctica conspiracy theories claim governments are hiding secret bases, ancient ruins, or entrances to hidden worlds beneath the ice.", imageUrl: "https://picsum.photos/seed/AntarcticaSecrets/512/512" },
+    { title: "Ancient Giants", category: "Hidden History", description: "Ancient Giants theories point to old reports of massive human skeletons allegedly hidden from the public by institutions like the Smithsonian.", imageUrl: "https://picsum.photos/seed/AncientGiants/512/512" },
+    { title: "Marilyn Monroe Assassination", category: "Elite & Power", description: "Some believe Marilyn Monroe was silenced because of her alleged connections to powerful political figures and secrets.", imageUrl: "https://picsum.photos/seed/MarilynMonroeAssassination/512/512" },
+    { title: "The Number 23", category: "Paranormal", description: "The Number 23 phenomenon claims the number appears everywhere in history, science, and daily life far too often to be coincidence.", imageUrl: "https://picsum.photos/seed/TheNumber23/512/512" },
+    { title: "440Hz Tuning Conspiracy", category: "Science & Tech", description: "This theory says modern music tuning at 440Hz was intentionally chosen to increase stress and anxiety instead of harmony.", imageUrl: "https://picsum.photos/seed/440HzTuningConspiracy/512/512" },
+    { title: "Smartphone Eavesdropping", category: "Technology", description: "Many believe smartphones constantly listen to conversations because ads often appear moments after discussing products aloud.", imageUrl: "https://picsum.photos/seed/SmartphoneEavesdropping/512/512" },
+    { title: "Rothschild Banking Control", category: "Elite & Power", description: "The Rothschild banking theory claims one powerful family secretly controls global banking systems and world economies.", imageUrl: "https://picsum.photos/seed/RothschildBankingControl/512/512" },
+    { title: "Google Search Manipulation", category: "Technology", description: "Some researchers argue Google’s search algorithms can subtly influence elections by changing what information people see first.", imageUrl: "https://picsum.photos/seed/GoogleSearchManipulation/512/512" },
+    { title: "Déjà Vu as Matrix Glitch", category: "Science & Tech", description: "Déjà vu is sometimes described as a “glitch in the Matrix,” where reality briefly repeats itself due to simulation errors.", imageUrl: "https://picsum.photos/seed/D%C3%A9j%C3%A0VuasMatrixGlitch/512/512" },
+    { title: "NSA Mass Surveillance", category: "Government", description: "Edward Snowden’s leaks revealed massive NSA surveillance programs collecting phone calls, searches, and online activity worldwide.", imageUrl: "https://picsum.photos/seed/NSAMassSurveillance/512/512" },
+    { title: "Voynich Manuscript", category: "Hidden History", description: "The Voynich Manuscript is a mysterious unreadable book filled with strange symbols and unknown plants that nobody has decoded.", imageUrl: "https://picsum.photos/seed/VoynichManuscript/512/512" },
+    { title: "Alien Octopuses", category: "Science & Tech", description: "A fringe theory claims octopuses may have extraterrestrial origins because of their unusual intelligence and biology.", imageUrl: "https://picsum.photos/seed/AlienOctopuses/512/512" },
+    { title: "Mount Rushmore Hidden Chamber", category: "Hidden History", description: "Mount Rushmore secretly contains a hidden chamber behind the carvings designed to store important American records and artifacts.", imageUrl: "https://picsum.photos/seed/MountRushmoreHiddenChamber/512/512" },
+    { title: "The Great Attractor", category: "Alien & Space", description: "The Great Attractor is a mysterious force pulling entire galaxies through space, and some theorists think it’s something artificial.", imageUrl: "https://picsum.photos/seed/TheGreatAttractor/512/512" },
+    { title: "Cleopatra's Ethnicity", category: "Hidden History", description: "Cleopatra VII was actually Macedonian Greek, not ethnically Egyptian as many assume.", imageUrl: "https://picsum.photos/seed/Cleopatra'sEthnicity/512/512" },
+    { title: "Stonehenge Reconstruction", category: "Hidden History", description: "Some claim Stonehenge was heavily reconstructed in the 1900s and may not be as ancient-looking as people think.", imageUrl: "https://picsum.photos/seed/StonehengeReconstruction/512/512" },
+    { title: "The Great Reset", category: "Elite & Power", description: "The Great Reset theory says global elites are using crises like COVID to reshape economies, technology, and personal freedoms worldwide.", imageUrl: "https://picsum.photos/seed/TheGreatReset/512/512" },
+    { title: "Operation Northwoods", category: "Military & War", description: "Operation Northwoods was a real US military proposal to stage fake attacks and blame Cuba to justify war during the Cold War.", imageUrl: "https://picsum.photos/seed/OperationNorthwoods/512/512" },
+    { title: "Subliminal Messaging", category: "Pop Culture", description: "Subliminal messaging theories claim hidden images and sounds in advertising can secretly influence consumer behavior and decisions.", imageUrl: "https://picsum.photos/seed/SubliminalMessaging/512/512" },
+    { title: "Adrenochrome Harvesting", category: "Elite & Power", description: "Adrenochrome theories claim elites harvest a chemical from terrified victims for power or youth, though no verified evidence exists.", imageUrl: "https://picsum.photos/seed/AdrenochromeHarvesting/512/512" },
+    { title: "Nazca Lines as Alien Markers", category: "Alien & Space", description: "Some believe Peru’s Nazca Lines were created as giant landing markers for alien spacecraft because they’re best viewed from the sky.", imageUrl: "https://picsum.photos/seed/NazcaLinesasAlienMarkers/512/512" },
+    { title: "Rh-Negative Bloodlines", category: "Alien & Space", description: "Rh-negative blood theories claim people without the Rh factor may descend from a mysterious non-human bloodline.", imageUrl: "https://picsum.photos/seed/Rh-NegativeBloodlines/512/512" },
+    { title: "Saturnian Broadcast", category: "Alien & Space", description: "The Saturnian Broadcast theory says Saturn and its strange hexagon storm may be part of an ancient artificial signal system.", imageUrl: "https://picsum.photos/seed/SaturnianBroadcast/512/512" },
+    { title: "The Bielefeld Conspiracy", category: "Paranormal", description: "The Bielefeld Conspiracy jokingly claims an entire German city doesn’t actually exist and is part of a massive cover-up.", imageUrl: "https://picsum.photos/seed/TheBielefeldConspiracy/512/512" },
+    { title: "Gravity Doesn't Exist", category: "Science & Tech", description: "Some fringe theorists reject gravity entirely, claiming objects fall only because of density and buoyancy differences.", imageUrl: "https://picsum.photos/seed/GravityDoesn'tExist/512/512" },
+    { title: "Mattress Firm Money Laundering", category: "Corporate", description: "Mattress Firm conspiracy theories question how so many stores stay open with so few customers, leading to money-laundering rumors.", imageUrl: "https://picsum.photos/seed/MattressFirmMoneyLaundering/512/512" },
+    { title: "CIA Invented Hippies", category: "Government", description: "The CIA Invented Hippies theory says intelligence agencies used drugs and counterculture to weaken political activism in the 1960s.", imageUrl: "https://picsum.photos/seed/CIAInventedHippies/512/512" },
+    { title: "COINTELPRO", category: "Government", description: "COINTELPRO was a real FBI operation used to infiltrate and disrupt civil rights groups, activists, and political movements.", imageUrl: "https://picsum.photos/seed/COINTELPRO/512/512" },
+    { title: "Truman Show Scripting", category: "Psychology", description: "The Truman Show Delusion is a documented condition where people believe their lives are secretly scripted and broadcast to the world.", imageUrl: "https://picsum.photos/seed/TrumanShowScripting/512/512" },
+    { title: "False Memory Implantation", category: "Science & Tech", description: "Scientists have shown false memories can be implanted, leading some to fear memory manipulation could someday be weaponized.", imageUrl: "https://picsum.photos/seed/FalseMemoryImplantation/512/512" },
+    { title: "Vatican Serpent Hall", category: "Religion", description: "Some believe the Vatican’s Paul VI Audience Hall was intentionally designed to resemble a giant serpent from above.", imageUrl: "https://picsum.photos/seed/VaticanSerpentHall/512/512" },
+    { title: "Tuskegee Experiment", category: "Health & Med", description: "The Tuskegee Experiment was a real US study where Black men with syphilis were denied treatment for decades without consent.", imageUrl: "https://picsum.photos/seed/TuskegeeExperiment/512/512" },
+    { title: "Hidden Non-Human Tech", category: "Alien & Space", description: "Recent UFO hearings and military testimonies reignited theories that governments possess hidden non-human technology.", imageUrl: "https://picsum.photos/seed/HiddenNon-HumanTech/512/512" },
+    { title: "Knights Templar Treasure", category: "Hidden History", description: "The Knights Templar treasure supposedly vanished after the order was dissolved, leading to legends of hidden gold and secret vaults.", imageUrl: "https://picsum.photos/seed/KnightsTemplarTreasure/512/512" },
+    { title: "Pineal Gland Third Eye", category: "Religion", description: "The pineal gland is called the “third eye” in many spiritual traditions, and some believe it unlocks higher consciousness.", imageUrl: "https://picsum.photos/seed/PinealGlandThirdEye/512/512" },
+    { title: "Operation Paperclip", category: "Military & War", description: "Operation Paperclip secretly brought former Nazi scientists to America after WWII to work on military and space programs.", imageUrl: "https://picsum.photos/seed/OperationPaperclip/512/512" },
+    { title: "Celebrity Clones", category: "Pop Culture", description: "Celebrity clone theories claim famous stars are secretly replaced by doubles or clones after sudden personality changes.", imageUrl: "https://picsum.photos/seed/CelebrityClones/512/512" },
+    { title: "Nuclear Weapons Bluff", category: "Military & War", description: "Some theorists argue nuclear weapons are exaggerated or fake and maintained as a global fear-based deterrence system.", imageUrl: "https://picsum.photos/seed/NuclearWeaponsBluff/512/512" },
+    { title: "Sumerian Alien Help", category: "Alien & Space", description: "The Sumerians appeared with advanced astronomy and writing systems so suddenly that some believe outside help was involved.", imageUrl: "https://picsum.photos/seed/SumerianAlienHelp/512/512" },
+    { title: "Bilderberg Group", category: "Elite & Power", description: "The Bilderberg Group gathers world leaders and CEOs in private annual meetings, fueling fears of secret global decision-making.", imageUrl: "https://picsum.photos/seed/BilderbergGroup/512/512" },
+    { title: "The Taos Hum", category: "Science & Tech", description: "The Taos Hum is a mysterious low-frequency sound heard by some people with no confirmed scientific explanation.", imageUrl: "https://picsum.photos/seed/TheTaosHum/512/512" },
+    { title: "Atlantis", category: "Hidden History", description: "Many believe Atlantis was a real advanced civilization destroyed by a catastrophic event thousands of years ago.", imageUrl: "https://picsum.photos/seed/Atlantis/512/512" },
+    { title: "Dark Web Societies", category: "Technology", description: "Some claim deeper layers of the dark web contain hidden societies and secret networks beyond normal internet access.", imageUrl: "https://picsum.photos/seed/DarkWebSocieties/512/512" },
+    { title: "Mark Zuckerberg is a Robot", category: "Pop Culture", description: "Internet jokes and conspiracy theories often portray Mark Zuckerberg as robotic or even non-human because of his unusual behavior.", imageUrl: "https://picsum.photos/seed/MarkZuckerbergisaRobot/512/512" },
+    { title: "Internet as Mass Surveillance", category: "Technology", description: "Because the internet began as a military project, some believe mass surveillance was always part of its true purpose.", imageUrl: "https://picsum.photos/seed/InternetasMassSurveillance/512/512" },
+    { title: "Tesla's Alien Contact", category: "Alien & Space", description: "Nikola Tesla once claimed he received strange radio signals from space, inspiring theories about alien contact.", imageUrl: "https://picsum.photos/seed/Tesla'sAlienContact/512/512" },
+    { title: "Smart Dust", category: "Technology", description: "Smart Dust refers to tiny microscopic sensors developed for surveillance and tracking. Some fear they could someday be secretly dispersed through the air.", imageUrl: "https://picsum.photos/seed/SmartDust/512/512" },
+    { title: "Time Capsule Propaganda", category: "Hidden History", description: "This theory claims time capsules are carefully curated propaganda tools designed to control how future generations view history.", imageUrl: "https://picsum.photos/seed/TimeCapsulePropaganda/512/512" },
+    { title: "Shared Dream Consciousness", category: "Psychology", description: "Some believe dreams are part of a shared collective consciousness where humans unknowingly connect through symbols and emotions.", imageUrl: "https://picsum.photos/seed/SharedDreamConsciousness/512/512" },
+    { title: "Hidden Sphinx Chambers", category: "Hidden History", description: "Researchers claim hidden chambers may exist beneath the Great Sphinx, possibly containing knowledge from a lost civilization.", imageUrl: "https://picsum.photos/seed/HiddenSphinxChambers/512/512" },
+    { title: "Agenda 21", category: "Government", description: "The Agenda 21 theory links UN sustainability plans with fears of population control and centralized global governance.", imageUrl: "https://picsum.photos/seed/Agenda21/512/512" },
+    { title: "Tunguska UFO Explosion", category: "Alien & Space", description: "The Tunguska explosion in Siberia flattened forests with enormous force, and some believe it was caused by a UFO rather than a meteor.", imageUrl: "https://picsum.photos/seed/TunguskaUFOExplosion/512/512" },
+    { title: "Expanding Earth Theory", category: "Science & Tech", description: "Expanding Earth Theory suggests Earth itself has grown larger over millions of years, separating the continents naturally.", imageUrl: "https://picsum.photos/seed/ExpandingEarthTheory/512/512" },
+    { title: "Jack the Ripper Royalty", category: "Elite & Power", description: "Some theories claim Jack the Ripper was secretly connected to British royalty and protected from exposure.", imageUrl: "https://picsum.photos/seed/JacktheRipperRoyalty/512/512" },
+    { title: "Airport Art Messages", category: "Hidden History", description: "Airport art conspiracy theories say strange murals and sculptures secretly communicate elite messages in public spaces.", imageUrl: "https://picsum.photos/seed/AirportArtMessages/512/512" },
+    { title: "Sandy Island Mystery", category: "Hidden History", description: "Sandy Island appeared on official maps for over 100 years until explorers discovered it never actually existed.", imageUrl: "https://picsum.photos/seed/SandyIslandMystery/512/512" },
+    { title: "Skull and Bones Influence", category: "Elite & Power", description: "Yale’s Skull and Bones society has produced many powerful political figures, leading to rumors of hidden influence over America.", imageUrl: "https://picsum.photos/seed/SkullandBonesInfluence/512/512" },
+    { title: "The Hutchison Effect", category: "Science & Tech", description: "The Hutchison Effect allegedly caused levitation and bizarre electromagnetic phenomena that scientists could never fully explain.", imageUrl: "https://picsum.photos/seed/TheHutchisonEffect/512/512" },
+    { title: "The Architect Distraction", category: "Psychology", description: "“The Architect” theory claims all conspiracy theories are intentionally created distractions hiding one deeper truth nobody notices.", imageUrl: "https://picsum.photos/seed/TheArchitectDistraction/512/512" }
+];
+
+    const RARE_THEORY = {
+        title: "THE ARCHITECT",
+        desc: "You were never supposed to find this room. The simulation is degrading. Close the tab. They are already watching you. WAKE UP.",
+        imageUrl: "https://picsum.photos/seed/TheArchitect_Rare/512/512"
+    };
+    THEORIES.sort(() => Math.random() - 0.5);
+
+    // ─── AUDIO ────────────────────────────────────────────────────────
+    const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+    let audioCtx;
+    function initAudio() {
+        if (!audioCtx) { audioCtx = new AudioCtxClass(); }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    ['keydown','touchstart','mousedown','pointerdown'].forEach(e => document.addEventListener(e, initAudio, {once:true}));
+
+    function playFootstep() {
+        if (!audioCtx) return;
+        try {
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            const now = audioCtx.currentTime;
+            o.type = 'sine';
+            o.frequency.setValueAtTime(90, now);
+            o.frequency.exponentialRampToValueAtTime(28, now + 0.12);
+            g.gain.setValueAtTime(0.12, now);
+            g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(now); o.stop(now + 0.13);
+        } catch(e) {}
+    }
+
+    function playOminousSting() {
+        if (!audioCtx) return;
+        try {
+            [45, 54, 63].forEach((freq, i) => {
+                const o = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                const now = audioCtx.currentTime + i * 0.6;
+                o.type = 'sawtooth';
+                o.frequency.setValueAtTime(freq, now);
+                o.frequency.linearRampToValueAtTime(freq * 0.7, now + 2);
+                g.gain.setValueAtTime(0.22, now);
+                g.gain.linearRampToValueAtTime(0.0001, now + 2);
+                o.connect(g); g.connect(audioCtx.destination);
+                o.start(now); o.stop(now + 2.1);
+            });
+        } catch(e) {}
+    }
+
+    
+    // ─── VERTEX NOISE ─────────────────────────────────────────────────
+    function wobble(geo, amt) {
+        const pos = geo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+            pos.setXYZ(i,
+                pos.getX(i) + (Math.random() - 0.5) * amt,
+                pos.getY(i) + (Math.random() - 0.5) * amt,
+                pos.getZ(i) + (Math.random() - 0.5) * amt
+            );
+        }
+        geo.computeVertexNormals();
+        return geo;
+    }
+
+    // ─── OUTLINE TRICK ────────────────────────────────────────────────
+    function outline(mesh, scale = 1.06, color = 0x2a1508) {
+        const m = new THREE.Mesh(mesh.geometry, new THREE.MeshBasicMaterial({ color, side: THREE.BackSide }));
+        m.scale.setScalar(scale);
+        mesh.add(m);
+        return m;
+    }
+
+    // ─── THREE.JS INIT ────────────────────────────────────────────────
+    function initThree() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2ebdc);
+        scene.fog = new THREE.FogExp2(0x9a8c7a, 0.035);
+
+        camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 120);
+        camera.position.set(0, CAM_Y_OFFSET, CAM_Z_OFFSET);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(innerWidth, innerHeight);
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.shadowMap.enabled = false;
+        document.getElementById('game-container').appendChild(renderer.domElement);
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffe8cc, 0.75));
+        const dir = new THREE.DirectionalLight(0xfff2d9, 0.4);
+        dir.position.set(3, 8, 4);
+        scene.add(dir);
+
+        clock = new THREE.Clock();
+
+        // Floating dust
+        const N = 600;
+        const pos = new Float32Array(N * 3);
+        for (let i = 0; i < N * 3; i++) pos[i] = (Math.random() - 0.5) * 25;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        dustPositions = geo.attributes.position;
+        dustParticles = new THREE.Points(geo, new THREE.PointsMaterial({
+            color: 0xffeebb, size: 0.12, transparent: true, opacity: 0.9, sizeAttenuation: true
+        }));
+        scene.add(dustParticles);
+    }
+
+    // ─── CUTE CHARACTER ───────────────────────────────────────────────
+    function createCharacter() {
+        charGroup = new THREE.Group();
+        charGroup.position.y = 0;
+
+        const cream  = new THREE.MeshToonMaterial({ color: 0xfffbef });
+        const cream2 = new THREE.MeshToonMaterial({ color: 0xf5f0e0 });
+        const brown  = new THREE.MeshToonMaterial({ color: 0x6d4c3d });
+        const black  = new THREE.MeshBasicMaterial({ color: 0x1a1008 });
+        const white  = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const blush  = new THREE.MeshBasicMaterial({ color: 0xffaaaa, transparent: true, opacity: 0.75 });
+        const nose   = new THREE.MeshToonMaterial({ color: 0xffaacc });
+
+        // ── BODY ──
+        const bodyGeo = wobble(new THREE.SphereGeometry(0.9, 20, 16), 0.05);
+        charParts.body = new THREE.Mesh(bodyGeo, cream);
+        charParts.body.scale.set(1.05, 0.9, 1.0);
+        charParts.body.position.y = 1.05;
+        outline(charParts.body, 1.05);
+        charGroup.add(charParts.body);
+
+        // ── FLUFF puffs on body ──
+        // Removed to make character less fluffy
+
+        // ── HEAD ──
+        const headGeo = wobble(new THREE.SphereGeometry(0.58, 20, 16), 0.03);
+        charParts.head = new THREE.Mesh(headGeo, cream);
+        charParts.head.scale.set(1.05, 1.0, 0.95);
+        charParts.head.position.set(0, 0.78, 0.42);
+        outline(charParts.head, 1.05);
+        charParts.body.add(charParts.head);
+
+        // Head fluff
+        // Removed to make character less fluffy
+
+        // ── EARS ──
+        const earGeo = wobble(new THREE.SphereGeometry(0.18, 8, 8), 0.02);
+        ['L','R'].forEach((s, i) => {
+            const ear = new THREE.Mesh(earGeo, cream);
+            ear.scale.set(0.8, 1.3, 0.7);
+            ear.position.set((i === 0 ? -1 : 1) * 0.42, 0.45, 0.05);
+            ear.rotation.z = (i === 0 ? 1 : -1) * 0.3;
+            outline(ear, 1.08);
+            charParts.head.add(ear);
+        });
+
+        // ── EYES (big, cute) ──
+        ['L','R'].forEach((s, i) => {
+            const side = i === 0 ? -1 : 1;
+            // White sclera
+            const sclera = new THREE.Mesh(wobble(new THREE.SphereGeometry(0.1, 10, 10), 0.005), white);
+            sclera.position.set(side * 0.22, 0.1, 0.5);
+            charParts.head.add(sclera);
+            // Dark pupil
+            const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.072, 8, 8), black);
+            pupil.position.set(side * 0.22, 0.1, 0.56);
+            charParts.head.add(pupil);
+            charParts[`eye${s}`] = pupil;
+            // Shine dot
+            const shine = new THREE.Mesh(new THREE.SphereGeometry(0.028, 6, 6), white);
+            shine.position.set(side * 0.21, 0.13, 0.623);
+            charParts.head.add(shine);
+        });
+
+        // ── BLUSH ──
+        ['L','R'].forEach((s, i) => {
+            const b = new THREE.Mesh(new THREE.CircleGeometry(0.12, 16), blush);
+            b.position.set((i === 0 ? -1 : 1) * 0.42, 0.0, 0.36);
+            b.rotation.y = (i === 0 ? -1 : 1) * 0.55;
+            charParts.head.add(b);
+        });
+
+        // ── NOSE ──
+        const noseM = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 8), nose);
+        noseM.position.set(0, -0.05, 0.555);
+        charParts.head.add(noseM);
+
+        // ── TINY ARMS (stubby) ──
+        ['L','R'].forEach((s, i) => {
+            const side = i === 0 ? -1 : 1;
+            const arm = new THREE.Mesh(wobble(new THREE.SphereGeometry(0.22, 8, 8), 0.03), cream);
+            arm.scale.set(0.6, 1.0, 0.55);
+            arm.position.set(side * 1.0, 0.05, 0.0);
+            arm.rotation.z = side * 0.4;
+            outline(arm, 1.08);
+            charParts.body.add(arm);
+            charParts[`arm${s}`] = arm;
+        });
+
+        // ── FEET ──
+        ['L','R'].forEach((s, i) => {
+            const side = i === 0 ? -1 : 1;
+            const foot = new THREE.Mesh(wobble(new THREE.SphereGeometry(0.24, 10, 8), 0.03), brown);
+            foot.scale.set(1.0, 0.55, 1.5);
+            foot.position.set(side * 0.38, 0.12, 0.1);
+            outline(foot, 1.1);
+            charGroup.add(foot);
+            charParts[`foot${s}`] = foot;
+        });
+
+        scene.add(charGroup);
+    }
+
+    // ─── GALLERY MATERIALS ────────────────────────────────────────────
+    let wallMat, floorMat, ceilMat, moldingMat;
+    let sharedGeos = {};
+
+    function buildFloorTexture() {
+        const c = document.createElement('canvas');
+        c.width = c.height = 512;
+        const ctx = c.getContext('2d');
+        // Warm parquet planks
+        const plankColors = ['#c4935a','#b88448','#d4a870','#c89060','#b87840'];
+        const PW = 64, PH = 512;
+        for (let col = 0; col < 8; col++) {
+            ctx.fillStyle = plankColors[col % plankColors.length];
+            ctx.fillRect(col * PW, 0, PW, PH);
+            // Grain lines
+            ctx.save(); ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 1.5;
+            for (let g = 20; g < PH; g += 40 + Math.random() * 30) {
+                ctx.beginPath(); ctx.moveTo(col*PW + 4, g); ctx.lineTo(col*PW + PW - 4, g + (Math.random() - 0.5) * 6);
+                ctx.stroke();
+            }
+            ctx.restore();
+            // Divider
+            ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(col * PW, 0, 3, PH);
+        }
+        const t = new THREE.CanvasTexture(c);
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(2.5, SEG_LEN / 5);
+        return t;
+    }
+
+    function initGalleryMaterials() {
+        wallMat   = new THREE.MeshToonMaterial({ color: 0xf4ede0 });
+        ceilMat   = new THREE.MeshToonMaterial({ color: 0xe8e0d0 });
+        moldingMat = new THREE.MeshToonMaterial({ color: 0xd4b896 });
+        floorMat  = new THREE.MeshToonMaterial({ map: buildFloorTexture() });
+
+        // Pre-cache wobbly geometries to prevent GC stuttering (lag)
+        sharedGeos.floor = wobble(new THREE.PlaneGeometry(FLOOR_W, SEG_LEN, 6, 12), 0.08);
+        sharedGeos.wall = wobble(new THREE.BoxGeometry(0.8, WALL_H, SEG_LEN, 1, 6, 8), 0.15);
+        sharedGeos.base = wobble(new THREE.BoxGeometry(0.12, 0.35, SEG_LEN, 1, 1, 4), 0.02);
+        sharedGeos.crown = wobble(new THREE.BoxGeometry(0.1, 0.25, SEG_LEN, 1, 1, 4), 0.02);
+        sharedGeos.ceil = wobble(new THREE.PlaneGeometry(FLOOR_W, SEG_LEN, 3, 6), 0.06);
+        sharedGeos.div = new THREE.PlaneGeometry(FLOOR_W, 0.06);
+
+        // Chandelier pieces
+        sharedGeos.chandRod = new THREE.CylinderGeometry(0.04, 0.04, 1.2, 8);
+        sharedGeos.chandBody = new THREE.CylinderGeometry(0.5, 0.1, 0.4, 16);
+        sharedGeos.chandArm = new THREE.CylinderGeometry(0.02, 0.02, 1.0, 8);
+        sharedGeos.chandBulb = new THREE.SphereGeometry(0.12, 8, 8);
+
+        const frameW = 2.8, frameH = 2.8, frameD = 0.22;
+        sharedGeos.frame = wobble(new THREE.BoxGeometry(frameW, frameH, frameD, 1, 1, 1), 0.02);
+        sharedGeos.lip = new THREE.BoxGeometry(frameW - 0.2, frameH - 0.2, frameD * 0.5);
+        sharedGeos.canvas = new THREE.PlaneGeometry(frameW - 0.5, frameH - 0.5);
+        sharedGeos.plaque = wobble(new THREE.BoxGeometry(frameW * 0.7, 0.3, 0.08, 1, 1, 1), 0.01);
+        sharedGeos.lampBase = new THREE.CylinderGeometry(0.1, 0.2, 0.35, 8);
+        sharedGeos.lampShade = new THREE.ConeGeometry(0.3, 0.35, 8, 1, true);
+    }
+
+    // ─── PAINTING FACTORY ─────────────────────────────────────────────
+    let paintingIdx = 0;
+
+    function makePainting(isLeft, zWorld) {
+        totalPaintings++;
+        const isRare = (totalPaintings % 100 === 0);
+        const theory = isRare ? RARE_THEORY : THEORIES[paintingIdx % THEORIES.length];
+        if (!isRare) paintingIdx++;
+
+        const group = new THREE.Group();
+
+        // Outer frame (thick, ornate)
+        const frameW = 2.8, frameH = 2.8, frameD = 0.22;
+        const fMat = new THREE.MeshToonMaterial({ color: isRare ? 0xffd700 : 0x5c3d1e });
+        if (isRare) fMat.emissive = new THREE.Color(0x443000);
+        const frame = new THREE.Mesh(sharedGeos.frame, fMat);
+        outline(frame, 1.035, 0x1a0f00);
+        group.add(frame);
+
+        // Inner lip (decorative)
+        const lip = new THREE.Mesh(sharedGeos.lip, new THREE.MeshToonMaterial({ color: isRare ? 0xb8860b : 0x3d2810 }));
+        lip.position.z = frameD * 0.1;
+        group.add(lip);
+
+        // Texture Loading via pre-fetched URL
+        const mat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+        
+        if (theory.imageUrl) {
+            const loader = new THREE.TextureLoader();
+            loader.setCrossOrigin('anonymous');
+            loader.load(theory.imageUrl, (tex) => {
+                tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                tex.minFilter = THREE.LinearMipmapLinearFilter;
+                tex.generateMipmaps = true;
+                mat.map = tex;
+                mat.color.setHex(0xffffff);
+                mat.needsUpdate = true;
+            });
+        }
+
+        // Canvas
+        const canvas = new THREE.Mesh(sharedGeos.canvas, mat);
+        canvas.position.z = frameD * 0.5 + 0.03;
+        group.add(canvas);
+
+        // Outline mesh (for glow)
+        const outMat = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.BackSide });
+        const outMesh = new THREE.Mesh(sharedGeos.frame, outMat);
+        outMesh.scale.setScalar(1.04);
+        group.add(outMesh);
+
+        // Position on wall
+        const xPos = isLeft ? -(WALL_DIST - 0.15) : (WALL_DIST - 0.15);
+        const fixedZ = 0; // center of segment
+        group.position.set(xPos, 3.2, fixedZ);
+        group.rotation.y = isLeft ? Math.PI / 2 : -Math.PI / 2;
+
+        // Title plaque below
+        const plaqueMat = new THREE.MeshToonMaterial({ color: 0xf2e8d0 });
+        const plaque = new THREE.Mesh(sharedGeos.plaque, plaqueMat);
+        plaque.position.y = -frameH / 2 - 0.25;
+        outline(plaque, 1.05, 0x333);
+        group.add(plaque);
+
+        // Gallery lamp above
+        const lampGroup = new THREE.Group();
+        const base = new THREE.Mesh(sharedGeos.lampBase, new THREE.MeshToonMaterial({ color: 0xc8a040 }));
+        outline(base, 1.06);
+        lampGroup.add(base);
+        const shade = new THREE.Mesh(sharedGeos.lampShade, new THREE.MeshToonMaterial({ color: 0xa07030, side: THREE.DoubleSide }));
+        shade.position.y = -0.32;
+        lampGroup.add(shade);
+        const ptLight = new THREE.PointLight(0xffddaa, isRare ? 2.5 : 1.2, 8);
+        ptLight.position.y = -0.5;
+        lampGroup.add(ptLight);
+        lampGroup.position.set(0, frameH / 2 + 0.5, 0);
+        group.add(lampGroup);
+
+        return {
+            mesh: group,
+            outMesh,
+            theory: theory,
+            z: zWorld + fixedZ,
+            isLeft,
+            isRare
+        };
+    }
+
+    // ─── SEGMENT SYSTEM ───────────────────────────────────────────────
+    function createSegment(index) {
+        const grp   = new THREE.Group();
+        const zOff  = -index * SEG_LEN;
+        grp.position.z = zOff;
+
+        // Floor
+        const floorM = new THREE.Mesh(sharedGeos.floor, floorMat);
+        floorM.rotation.x = -Math.PI / 2;
+        grp.add(floorM);
+
+        // Walls (left & right)
+        [-1, 1].forEach(side => {
+            const wall = new THREE.Mesh(sharedGeos.wall, wallMat);
+            wall.position.set(side * (WALL_DIST + 0.4), WALL_H / 2, 0);
+            grp.add(wall);
+
+            // Baseboard molding
+            const base = new THREE.Mesh(sharedGeos.base, moldingMat);
+            base.position.set(side * WALL_DIST, 0.18, 0);
+            grp.add(base);
+
+            // Crown molding at top
+            const crown = new THREE.Mesh(sharedGeos.crown, moldingMat);
+            crown.position.set(side * WALL_DIST, WALL_H - 0.5, 0);
+            grp.add(crown);
+        });
+
+        // Ceiling
+        const ceil = new THREE.Mesh(sharedGeos.ceil, ceilMat);
+        ceil.rotation.x = Math.PI / 2;
+        ceil.position.y = WALL_H;
+        grp.add(ceil);
+
+        // Paintings on this segment
+        const pL = makePainting(true,  zOff);
+        const pR = makePainting(false, zOff);
+        grp.add(pL.mesh);
+        grp.add(pR.mesh);
+        paintings.push(pL, pR);
+
+        // Floor divider line between segments
+        const divM   = new THREE.Mesh(sharedGeos.div, new THREE.MeshBasicMaterial({ color: 0x8a6a40, opacity: 0.5, transparent: true }));
+        divM.rotation.x = -Math.PI / 2;
+        divM.position.y = 0.001;
+        divM.position.z = SEG_LEN / 2;
+        grp.add(divM);
+
+        // Chandelier on the ceiling in a little long gap (every 3 segments)
+        if (index % 3 === 0) {
+            const chGrp = new THREE.Group();
+            
+            const rod = new THREE.Mesh(sharedGeos.chandRod, moldingMat);
+            rod.position.y = WALL_H - 0.6;
+            chGrp.add(rod);
+            
+            const body = new THREE.Mesh(sharedGeos.chandBody, moldingMat);
+            body.position.y = WALL_H - 1.2;
+            chGrp.add(body);
+            
+            const armMat = new THREE.MeshToonMaterial({ color: 0x5a4a3a });
+            const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfff0cc });
+            for(let a = 0; a < 6; a++) {
+                const angle = (a / 6) * Math.PI * 2;
+
+                // Pivot group at chandelier body center — rotate around Y to point each arm outward
+                const armPivot = new THREE.Group();
+                armPivot.position.set(0, WALL_H - 1.2, 0);
+                armPivot.rotation.y = angle;
+
+                // Arm cylinder: rotate 90° on X so it lies along Z (outward), centered at Z=0.5
+                const arm = new THREE.Mesh(sharedGeos.chandArm, armMat);
+                arm.rotation.x = Math.PI / 2;
+                arm.position.set(0, 0, 0.5);
+                armPivot.add(arm);
+
+                // Bulb droops slightly at tip of arm
+                const bulb = new THREE.Mesh(sharedGeos.chandBulb, bulbMat);
+                bulb.position.set(0, -0.18, 1.0);
+                armPivot.add(bulb);
+
+                // Point light at bulb tip
+                const clight = new THREE.PointLight(0xffddaa, 0.9, 14);
+                clight.position.copy(bulb.position);
+                armPivot.add(clight);
+
+                chGrp.add(armPivot);
+            }
+            
+            grp.add(chGrp);
+        }
+
+        scene.add(grp);
+        return { grp, index };
+    }
+
+    function manageSegments() {
+        const charZ  = charGroup.position.z;
+        const curIdx = Math.floor(-charZ / SEG_LEN);
+
+        for (let i = Math.max(0, curIdx - 1); i < curIdx + 6; i++) {
+            if (!segments.find(s => s.index === i)) {
+                segments.push(createSegment(i));
+            }
+        }
+        segments = segments.filter(s => {
+            if (s.index < curIdx - 2) {
+                scene.remove(s.grp);
+                paintings = paintings.filter(p => !s.grp.children.includes(p.mesh));
+                return false;
+            }
+            return true;
+        });
+    }
+
+    // ─── INTERACTION ──────────────────────────────────────────────────
+    const inspectOverlay = document.getElementById('inspect-overlay');
+    const inspectTitle   = document.getElementById('inspect-title');
+    const inspectDesc    = document.getElementById('inspect-desc');
+    const inspectCC      = document.getElementById('inspect-canvas-container');
+    const controlsHint   = document.getElementById('controls-hint');
+    const inspectHint    = document.getElementById('inspect-hint');
+
+    setTimeout(() => { controlsHint.style.opacity = '0'; controlsHint.style.pointerEvents = 'none'; }, 9000);
+
+    function openInspect(p) {
+        gameState = 'INSPECT';
+        inspectOverlay.style.display = 'flex';
+        inspectTitle.innerText       = p.theory.title;
+        inspectDesc.innerText        = p.theory.description || p.theory.desc;
+        inspectTitle.className       = p.isRare ? 'rare-frame' : '';
+
+        // Add Wikipedia / Reddit links with icons (removing Ask Claude)
+        let existingLinks = document.getElementById('inspect-links');
+        if (existingLinks) existingLinks.remove();
+        
+        const linksHtml = `
+            <div id="inspect-links" style="margin-top: 25px; display: flex; gap: 15px; font-size: 1.1rem; justify-content: center;">
+                <a href="https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(p.theory.title)}" target="_blank" style="color: #fff; text-decoration: none; display: flex; align-items: center; gap: 8px; background: #333; padding: 10px 18px; border-radius: 6px; font-weight: bold; border: 1px solid #555;">
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M14.075 1.125a.75.75 0 0 1 .47 1.055l-5 12a.75.75 0 0 1-1.398-.035l-2.036-5.599-5.598-2.035a.75.75 0 0 1-.035-1.399l12-5a.75.75 0 0 1 1.054.469l.543 1.044z"/></svg>
+                    Wikipedia
+                </a>
+                <a href="https://www.reddit.com/search/?q=${encodeURIComponent(p.theory.title)}" target="_blank" style="color: #fff; text-decoration: none; display: flex; align-items: center; gap: 8px; background: #ff4500; padding: 10px 18px; border-radius: 6px; font-weight: bold;">
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M15.54 7.63a2.53 2.53 0 0 0-2.31-2.48 5.6 5.6 0 0 0-3.32-.78l.64-3 2.56.54a1.76 1.76 0 1 0 .28-1.07l-2.82-.6a.37.37 0 0 0-.44.29l-.75 3.51a5.62 5.62 0 0 0-3.41.8 2.52 2.52 0 0 0-2.32 2.47 2.44 2.44 0 0 0 .52 1.54 4.56 4.56 0 0 0-.16 1.2c0 2.68 3.55 4.85 7.9 4.85s7.9-2.17 7.9-4.85a4.4 4.4 0 0 0-.15-1.18 2.44 2.44 0 0 0 .51-1.54M4.15 9.19a1.44 1.44 0 1 1 1.44-1.44 1.44 1.44 0 0 1-1.44 1.44m8.05 3.17c-1.58 1.58-5.32 1.63-5.32 1.63s-3.74-.05-5.32-1.63a.35.35 0 1 1 .5-.5c1.3 1.3 4.82 1.35 4.82 1.35s3.52-.05 4.82-1.35a.35.35 0 1 1 .5.5m-.35-3.17a1.44 1.44 0 1 1 1.44-1.44 1.44 1.44 0 0 1-1.44 1.44"/></svg>
+                    Reddit
+                </a>
+            </div>
+        `;
+        inspectDesc.insertAdjacentHTML('afterend', linksHtml);
+
+        inspectCC.innerHTML = '';
+        if (p.theory.imageUrl) {
+            const img = document.createElement('img');
+            img.src = p.theory.imageUrl;
+            inspectCC.appendChild(img);
+        }
+
+        if (p.isRare) playOminousSting();
+        if (!seenPaintings.has(p.theory.title)) {
+            seenPaintings.add(p.theory.title);
+            document.getElementById('seen-count').innerText = seenPaintings.size;
+        }
+    }
+
+    function closeInspect() {
+        gameState = 'WALK';
+        inspectOverlay.style.display = 'none';
+    }
+
+    window.addEventListener('keydown', e => {
+        if (gameState === 'INSPECT') {
+            if (e.code === 'Escape' || e.code === 'Space') { e.preventDefault(); closeInspect(); }
+            return;
+        }
+        e.preventDefault && ['ArrowLeft','ArrowRight','Space','KeyA','KeyD'].includes(e.code) && e.preventDefault();
+        if (e.code === 'ArrowLeft'  || e.code === 'KeyA') { if (currentLane > -1) { currentLane--; targetLaneX = currentLane * LANE_WIDTH; } }
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') { if (currentLane <  1) { currentLane++; targetLaneX = currentLane * LANE_WIDTH; } }
+        if (e.code === 'Space' && activePainting) openInspect(activePainting);
+    });
+
+    let touchStartX = 0;
+    window.addEventListener('touchstart', e => {
+        touchStartX = e.touches[0].clientX;
+        if (gameState === 'INSPECT') { return; }
+        if (activePainting) { openInspect(activePainting); return; }
+    }, { passive: true });
+    window.addEventListener('touchend', e => {
+        if (gameState === 'INSPECT') return;
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        if (Math.abs(dx) < 12) return; // tap
+        if (dx < 0 && currentLane > -1) { currentLane--; targetLaneX = currentLane * LANE_WIDTH; }
+        if (dx > 0 && currentLane <  1) { currentLane++; targetLaneX = currentLane * LANE_WIDTH; }
+    }, { passive: true });
+
+    inspectOverlay.addEventListener('pointerdown', e => { if (e.target === inspectOverlay || e.target.id === 'inspect-close') closeInspect(); });
+
+    // ─── MAIN LOOP ────────────────────────────────────────────────────
+    let footTimer = 0;
+    let blinkTimer = 3 + Math.random() * 3;
+    let walkCycle  = 0;
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function update() {
+        requestAnimationFrame(update);
+        const dt   = Math.min(clock.getDelta(), 0.05);
+        const time = clock.getElapsedTime();
+
+        if (gameState === 'WALK') {
+            // Auto-walk
+            charGroup.position.z -= WALK_SPEED;
+            walkCycle += WALK_SPEED * 4;
+
+            // Smooth lane switching
+            charGroup.position.x = lerp(charGroup.position.x, targetLaneX, 0.1);
+
+            // Body tilt in direction of movement
+            const leanAmount = (targetLaneX - charGroup.position.x) * 0.18;
+            charGroup.rotation.z = lerp(charGroup.rotation.z, -leanAmount, 0.12);
+
+            // Idle body bob
+            charParts.body.position.y   = 1.05 + Math.sin(time * 3.5) * 0.045;
+            charParts.body.rotation.z   = Math.sin(time * 2.2) * 0.025;
+
+            // Walk squish
+            const squish = 1.0 + Math.sin(walkCycle * 2) * 0.04;
+            charParts.body.scale.set(1.05 / squish, 0.9 * squish, 1.0);
+
+            // Foot swing
+            const sw = Math.sin(walkCycle);
+            charParts.footL.position.y = 0.12 + Math.max(0, sw) * 0.3;
+            charParts.footL.position.z = sw * 0.4;
+            charParts.footL.rotation.x = sw * 0.4;
+            charParts.footR.position.y = 0.12 + Math.max(0, -sw) * 0.3;
+            charParts.footR.position.z = -sw * 0.4;
+            charParts.footR.rotation.x = -sw * 0.4;
+
+            // Arm swing (opposite to feet)
+            charParts.armL.rotation.x = -sw * 0.3;
+            charParts.armR.rotation.x =  sw * 0.3;
+
+            // Head slight look-around
+            charParts.head.rotation.y = Math.sin(time * 0.8) * 0.12;
+
+            // Footstep sound
+            footTimer += WALK_SPEED;
+            if (footTimer > 0.25) { playFootstep(); footTimer = 0; }
+
+            // Blink
+            blinkTimer -= dt;
+            if (blinkTimer <= 0 && !isBlinking) {
+                isBlinking = true;
+                charParts.eyeL.scale.y = 0.08;
+                charParts.eyeR.scale.y = 0.08;
+                setTimeout(() => {
+                    if (charParts.eyeL) { charParts.eyeL.scale.y = 1; charParts.eyeR.scale.y = 1; }
+                    isBlinking = false;
+                    blinkTimer = 3 + Math.random() * 4;
+                }, 130);
+            }
+
+            manageSegments();
+            document.getElementById('depth-count').innerText = Math.floor(-charGroup.position.z);
+        }
+
+        // Smooth camera follow
+        const tCamX = charGroup.position.x * 0.45;
+        const tCamY = charGroup.position.y + CAM_Y_OFFSET;
+        const tCamZ = charGroup.position.z + CAM_Z_OFFSET;
+        camX = lerp(camX, tCamX, 0.05);
+        camY = lerp(camY, tCamY, 0.06);
+        camZ = lerp(camZ, tCamZ, 0.08);
+        camera.position.set(camX, camY, camZ);
+
+        const lookX = lerp(camera.position.x, charGroup.position.x, 0.3);
+        camera.lookAt(lookX, charGroup.position.y + 1.0, charGroup.position.z - 4);
+
+        // Animate dust particles
+        const dp = dustPositions;
+        for (let i = 0; i < dp.count; i++) {
+            let y = dp.getY(i) + 0.008 * Math.sin(time * 0.5 + i);
+            if (y > 6) y = 0;
+            dp.setY(i, y);
+        }
+        dp.needsUpdate = true;
+        dustParticles.position.set(camX, 0, camZ - 8);
+
+        // Painting proximity & glow
+        activePainting = null;
+        let closestD = Infinity;
+
+        for (const p of paintings) {
+            // Reset outline
+            p.outMesh.material.color.setHex(0x111111);
+            p.mesh.scale.setScalar(1.0);
+
+            const pWorldZ = p.z;
+            const dz = Math.abs(pWorldZ - charGroup.position.z);
+            const charSide = Math.sign(charGroup.position.x) || 0;
+            const pSide    = p.isLeft ? -1 : 1;
+
+            if (dz < 4.0 && (charSide === pSide || Math.abs(charGroup.position.x) < 0.8)) {
+                if (dz < closestD) { closestD = dz; activePainting = p; }
+            }
+        }
+
+        if (activePainting) {
+            const pulse = 0.5 + Math.sin(time * 6) * 0.5;
+            const gc = activePainting.isRare ? 0xffcc00 : 0xffaa33;
+            activePainting.outMesh.material.color.setHex(gc);
+            const sc = 1.03 + pulse * 0.015;
+            activePainting.mesh.scale.setScalar(sc);
+            inspectHint.style.display = 'block';
+        } else {
+            inspectHint.style.display = 'none';
+        }
+
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+    });
+
+    // ─── BOOTSTRAP ────────────────────────────────────────────────────
+    function init() {
+        initThree();
+        initGalleryMaterials();
+                createCharacter();
+        manageSegments();
+        update();
+    }
+    init();
+    </script>
+</body>
+</html>
