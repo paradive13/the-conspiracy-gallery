@@ -2,6 +2,8 @@
 
 ![Cover](assets/cover.png)
 
+[Live Demo](https://paradive13.github.io/the-conspiracy-gallery/)
+
 > “Some truths are drawn, not told.”
 
 An eerie endless 3D art gallery where conspiracy theories come alive through creepy paintings, hidden lore, and unsettling discoveries.
